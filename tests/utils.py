@@ -7,9 +7,25 @@
     :created: 2024-12-02
 """
 
+import os
 from os.path import abspath, dirname, join
 
+import redis
+
 projdir = dirname(dirname(abspath(__file__)))
+
+
+def redis_connect() -> redis.Redis:
+    """open redis connection reading parameters from process environment"""
+
+    getenv = os.environ.get
+
+    return redis.Redis(
+            host=getenv("REDIS_HOST", "localhost"),
+            port=int(getenv("REDIS_PORT", "6379")),
+            db=int(getenv("REDIS_DB", "9")),
+            decode_responses=True,
+    )
 
 
 class FileLoader:
