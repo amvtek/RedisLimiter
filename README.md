@@ -33,7 +33,7 @@ $> cd path/to/project/git/folder # ...
 $> python3 -m venv ../VENV
 $> source ../VENV/bin/activate
 (VENV)$> pip install -U pip setuptools wheel
-(VENV)$> pip install redis
+(VENV)$> pip install -r requirements.txt
 ```
 
 #### Running the tests
