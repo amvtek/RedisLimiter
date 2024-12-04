@@ -6,9 +6,11 @@
 
     :created: 2024-12-02
 """
+
 import unittest
 
 from .utils import load_lua_command, redis_connect
+
 
 class TestUtils(unittest.TestCase):
 
@@ -21,5 +23,3 @@ class TestUtils(unittest.TestCase):
         msg = "hello test"
         resp = rdsconn.echo(msg)
         self.assertTrue(resp == msg)
-
-
