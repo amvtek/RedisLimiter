@@ -88,8 +88,14 @@ end
 
 -- clamp the sliding windows
 -- note that remstop is prefixed by '(' so that it is excluded from the range
-local remstop = string.format("(%016d", at_usec - ttl_usec)
+local remstop = string.format("(%016d_000000", at_usec - ttl_usec)
 redis.call('ZREMRANGEBYLEX', slwkey, '-', remstop)
+
+-- check that the index contains less than 1E6 events
+local zcard = redis.call('ZCARD', slwkey)
+if zcard > 999999 then
+  return redis.error_reply("Index is full, contains more than 1E6 events!")
+end
 
 -- check all sliding window conditions
 -- script allows enforcing 1 or more condition
@@ -101,8 +107,8 @@ for i=1, numcond do
   local slwsize_usec = math.floor(tonumber(ARGV[2*i + 1]) * 1000)
   local slwlimit = tonumber(ARGV[2*i + 2])
   -- slwstart, slwend are prefixed with '[' so that redis interprets them as inclusive
-  local slwstart = string.format("[%016d", at_usec - slwsize_usec)
-  local slwend = string.format("[%016d", at_usec)
+  local slwstart = string.format("[%016d_000000", at_usec - slwsize_usec)
+  local slwend = string.format("[%016d_999999", at_usec)
   local numevt = redis.call('ZLEXCOUNT', slwkey, slwstart, slwend)
   if numevt >= slwlimit then
     -- as in C we use non zero value to report error
@@ -112,7 +118,9 @@ end
 
 -- all sliding window checks were successful
 -- hence we record a new event
-local evtkey = string.format("%016d", at_usec)
+-- Note that we append current index cardinality to the event
+-- This is because many events can have the same microsecond timestamp
+local evtkey = string.format("%016d_%06d", at_usec, zcard)
 redis.call('ZADD', slwkey, 0, evtkey)
 
 -- schedule key expiration
