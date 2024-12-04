@@ -9,6 +9,7 @@
 
 import os
 from os.path import abspath, dirname, join
+from typing import NamedTuple, Optional
 
 import redis
 
@@ -21,11 +22,44 @@ def redis_connect() -> redis.Redis:
     getenv = os.environ.get
 
     return redis.Redis(
-            host=getenv("REDIS_HOST", "localhost"),
-            port=int(getenv("REDIS_PORT", "6379")),
-            db=int(getenv("REDIS_DB", "9")),
-            decode_responses=True,
+        host=getenv("REDIS_HOST", "localhost"),
+        port=int(getenv("REDIS_PORT", "6379")),
+        db=int(getenv("REDIS_DB", "9")),
+        decode_responses=True,
     )
+
+
+class WindowDef(NamedTuple):
+    size_ms: int
+    limit: int
+
+
+def add_sliding_window_cmd(rdsconn: redis.Redis) -> None:
+    """add sliding_window command to rdsconn connection"""
+
+    scriptsrc = load_lua_command("sliding_window.lua")
+    callcmd = rdsconn.register_script(scriptsrc)
+
+    # callcmd is low level
+    # to ease its usage we expose it through a wrapper with named arguments
+    def sliding_window(
+        key: str,
+        main_window: WindowDef,
+        *burst_limits: WindowDef,
+        at_usec: int = 0,
+        ttl_msec: int = 30_000,
+        pipe_to: Optional[redis.client.Pipeline] = None,
+    ):
+        lua_args = [at_usec, ttl_msec]
+        lua_args.extend(main_window)
+        for bw in burst_limits:
+            lua_args.extend(bw)
+
+        return callcmd(keys=[key], args=lua_args, client=pipe_to)
+
+    rdsconn.sliding_window = sliding_window
+
+    return rdsconn
 
 
 class FileLoader:
