@@ -4,33 +4,37 @@ jobs:
   tests:
     name: Run the tests
     runs-on: ubuntu-latest
-    container: python:3.12-slim-bookworm
 
     services:
       redis:
         image: redis
+        ports:
+          - 6379/tcp
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
-    env:
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_DB: 0
-
     steps:
 
     - name: Checkout repository code
       uses: actions/checkout@v4
 
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
     - name: Install Python dependencies
-      shell: bash -el {0}
       run: |
         pip install -r requirements.txt
 
     - name: Run tests
-      shell: bash -el {0}
+      env:
+        REDIS_PORT: ${{job.services.redis.ports[6379]}}
+        REDIS_HOST: 'localhost'
+        REDIS_DB: 0
       run: |
         python -m unittest -v
