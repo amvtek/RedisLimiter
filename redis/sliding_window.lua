@@ -124,8 +124,7 @@ local evtkey = string.format("%016d_%06d", at_usec, zcard)
 redis.call('ZADD', slwkey, 0, evtkey)
 
 -- schedule key expiration
-local ttl_sec = math.ceil(ttl_ms / 1000)
-redis.call('EXPIRE', slwkey, ttl_sec)
+redis.call('PEXPIRE', slwkey, ttl_ms)
 
 -- 0 status means success
 return 0
