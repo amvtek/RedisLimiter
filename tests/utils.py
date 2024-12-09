@@ -8,6 +8,7 @@
 """
 
 import os
+import secrets
 from os.path import abspath, dirname, join
 from typing import NamedTuple, Optional
 
@@ -60,6 +61,11 @@ def add_sliding_window_cmd(rdsconn: redis.Redis) -> None:
     rdsconn.sliding_window = sliding_window
 
     return rdsconn
+
+def safe_key() -> str:
+    """return random key"""
+    token = secrets.token_hex(8).upper()
+    return f"TEST-{token}"
 
 
 class FileLoader:

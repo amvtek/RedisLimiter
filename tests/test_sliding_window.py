@@ -10,9 +10,10 @@
 import time
 import unittest
 
-from .utils import add_sliding_window_cmd, redis_connect, WindowDef
+from .utils import add_sliding_window_cmd, redis_connect, WindowDef, safe_key
 
-TEST_KEY = "not_used_elsewhere"
+# random TEST_KEY to prevent use conflicts if multiple tests run in //
+TEST_KEY = safe_key()
 
 
 class TestRedisConn(unittest.TestCase):
