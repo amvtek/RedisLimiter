@@ -47,20 +47,22 @@ def add_sliding_window_cmd(rdsconn: redis.Redis) -> None:
         key: str,
         main_window: WindowDef,
         *burst_limits: WindowDef,
-        at_usec: int = 0,
-        ttl_msec: int = 30_000,
+        extra_ttl_ms: Optional[int] = None,
         pipe_to: Optional[redis.client.Pipeline] = None,
     ):
-        lua_args = [at_usec, ttl_msec]
+        lua_args = []
         lua_args.extend(main_window)
         for bw in burst_limits:
             lua_args.extend(bw)
+        if extra_ttl_ms is not None:
+            lua_args.append(extra_ttl_ms)
 
         return callcmd(keys=[key], args=lua_args, client=pipe_to)
 
     rdsconn.sliding_window = sliding_window
 
     return rdsconn
+
 
 def safe_key() -> str:
     """return random key"""

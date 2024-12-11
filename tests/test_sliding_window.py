@@ -10,6 +10,8 @@
 import time
 import unittest
 
+from redis import ResponseError
+
 from .utils import add_sliding_window_cmd, redis_connect, WindowDef, safe_key
 
 # random TEST_KEY to prevent use conflicts if multiple tests run in //
@@ -47,7 +49,7 @@ class TestSlidingWindow(TestRedisConn):
         # use the command 5 times
         # we shall succeed 4 times (status=0) and fail 1 time (status=1)
         for pos, expect in enumerate([0, 0, 0, 0, 1]):
-            actual = sliding_window_cmd(TEST_KEY, window, ttl_msec=1_010)
+            actual = sliding_window_cmd(TEST_KEY, window)
             self.assertEqual(actual, expect, f"failed assertion #{pos}")
 
     def test_w10000_b100_roundtrip(self):
@@ -73,9 +75,7 @@ class TestSlidingWindow(TestRedisConn):
 
         for gn, expects in enumerate(status_groups):
             for pos, expect in enumerate(expects):
-                actual = sliding_window_cmd(
-                    TEST_KEY, window, burst_limit, ttl_msec=10_100
-                )
+                actual = sliding_window_cmd(TEST_KEY, window, burst_limit)
                 self.assertEqual(actual, expect, f"failed assertion #{gn}-{pos}")
             time.sleep(0.060)
 
@@ -90,7 +90,7 @@ class TestSlidingWindow(TestRedisConn):
         # set redis cmd pipe
         ppl = rdsconn.pipeline()
         for _ in range(5):
-            sliding_window_cmd(TEST_KEY, window, ttl_msec=110, pipe_to=ppl)
+            sliding_window_cmd(TEST_KEY, window, pipe_to=ppl)
         resp = ppl.execute()
         self.assertEqual(resp, [0, 0, 0, 0, 1])
 
@@ -119,9 +119,7 @@ class TestSlidingWindow(TestRedisConn):
         for gn, expects in enumerate(status_groups):
             ppl = rdsconn.pipeline()
             for _ in expects:
-                sliding_window_cmd(
-                    TEST_KEY, window, burst_limit, ttl_msec=1_010, pipe_to=ppl
-                )
+                sliding_window_cmd(TEST_KEY, window, burst_limit, pipe_to=ppl)
             self.assertEqual(ppl.execute(), expects, "failed assertion #{gn}")
             time.sleep(0.015)
 
@@ -133,12 +131,36 @@ class TestSlidingWindow(TestRedisConn):
         # main window: no more than 1 requests in 50 ms
         window = WindowDef(size_ms=50, limit=1)
 
-        actual = sliding_window_cmd(TEST_KEY, window, ttl_msec=55)
-        self.assertEqual(actual, 0, f"failed assertion")
+        actual = sliding_window_cmd(TEST_KEY, window, extra_ttl_ms=5)
+        self.assertEqual(actual, 0, "failed assertion")
 
-        time.sleep(0.060)
+        # make sure TEST_KEY still exists after 40 ms
+        # we access TEST_KEY before testing existence so that redis expires it if it has reached eol.
+        time.sleep(0.040)
+        rdsconn.pttl(TEST_KEY)
+        self.assertEqual(rdsconn.exists(TEST_KEY), 1, "missing TEST_KEY")
+
+        # make sure TEST_KEY has expired after waiting 20 ms more
+        time.sleep(0.020)
         ttl = rdsconn.pttl(TEST_KEY)
-        self.assertFalse(rdsconn.exists(TEST_KEY), f"TEST_KEY still up for {ttl} ms")
+        self.assertEqual(rdsconn.exists(TEST_KEY), 0, f"TEST_KEY still up for {ttl} ms")
+
+    def test_invalid_args(self):
+
+        rdsconn = self.rdsconn
+        sliding_window_cmd = rdsconn.sliding_window
+
+        # missing limit
+        with self.assertRaises(ResponseError):
+            sliding_window_cmd(TEST_KEY, (50,))
+
+        # invalid size_ms
+        with self.assertRaises(ResponseError):
+            sliding_window_cmd(TEST_KEY, ("notanum", 10))
+
+        # invalid burst limit
+        with self.assertRaises(ResponseError):
+            sliding_window_cmd(TEST_KEY, (100, 10), (10, "notanum"))
 
     def test_teardown(self):
 
