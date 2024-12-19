@@ -4,5 +4,17 @@ services:
     image: redis:latest
     ports:
       - 6379:6379
+  devterm:
+    user: $LOCAL_USER_NAME
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        - USERNAME=$LOCAL_USER_NAME
+        - USER_ID=$LOCAL_UID
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=9
     volumes:
-      - ./redis:/data/lua
+      - ${LOCAL_CODE_REPOSITORY}:/home/${LOCAL_USER_NAME}/repos

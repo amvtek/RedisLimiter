@@ -7,25 +7,35 @@ limiting.
 
 ### Docker
 
-For convenience a docker compose file is provided that allows running a redis server on
-development machine. You can use another redis server than the one provided by the
-project compose file.  
+For convenience a docker compose file is provided that provides:
+* a dockerized redis server sufficient for test
+* a devterm environment that allows running tests against the redis server
 
-To start the dockerized redis server, run this command in bash terminal :
+Prior to use docker compose, you shall run the provided `./setup` script to generate the
+necessary configuration (`.env` file...)
+
+To start the dockerized services, run this command in bash terminal :
 ```bash
 $> docker compose up -d
 ```
 
-To stop the dockerized redis server, run this command in bash terminal :
+To stop the dockerized services, run this command in bash terminal :
 ```bash
 $> docker compose down
 ```
+
+Once docker compose is running, to access the devterm developer console run this command
+in bash terminal:
+```bash
+$> docker compose run --rm devterm bash
+``` 
 
 ### Python tests
 
 Tests for the custom redis commands are implemented in Python.
 
 #### Virtual Environment creation
+This step is not required if you are using docker compose
 
 Run those commands in bash terminal :
 ```bash
