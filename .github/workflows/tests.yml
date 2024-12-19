@@ -21,6 +21,21 @@ jobs:
     - name: Checkout repository code
       uses: actions/checkout@v4
 
+    - name: Setup stylua formatter
+      uses: JohnnyMorganz/stylua-action@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        version: 2.0.2
+        args: --version
+
+    - name: Lint lua sources
+      run: |
+        make lint
+
+    - name: Check that lua func module pack last scripts version
+      run: |
+        make checkfunc
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -37,4 +52,4 @@ jobs:
         REDIS_HOST: 'localhost'
         REDIS_DB: 0
       run: |
-        python -m unittest -v
+        make tests
