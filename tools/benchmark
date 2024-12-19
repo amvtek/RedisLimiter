@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -e
+
+# Configure the redis connection
+redis_host=${REDIS_HOST:-localhost}
+redis_port=${REDIS_PORT:-6379}
+redis_db=${REDIS_DB:-9}
+
+
+# Initialize selected benchmark 
+case $1 in
+	"sliding_window_script")
+		echo "Load sliding_window.lua script to REDIS"
+		script_id=$(cat src/sliding_window.lua | redis-cli -h $redis_host -p $redis_port -n $redis_db -x SCRIPT LOAD)
+		echo "Success loading sliding_window.lua script to REDIS, EVALSHA is $script_id"
+		CMD="EVALSHA $script_id 1";;
+
+	"sliding_window_func")
+		echo "Load rdslim lua library to REDIS"
+		result=$(cat src/redis_limiter_funcs.lua | redis-cli -h $redis_host -p $redis_port -n $redis_db -x FUNCTION LOAD REPLACE)
+		echo "Success loading rdslim library to REDIS, result is $result"
+		CMD="FCALL sliding_window 1";;
+
+	*)
+		echo "ERROR: Invalid benchmark target $1" >&2
+		echo "---" >&2
+		echo "USAGE: $0 <target>. Supported targets:" >&2
+		echo "" >&2
+		echo "sliding_window_script:" >&2
+		echo "    benchmark the sliding_window.lua script command" >&2
+		echo "" >&2
+		echo "sliding_window_func:" >&2
+		echo "    benchmark the sliding_window lua function command" >&2
+		exit 1;;
+esac
+
+
+
+
+echo "---"
+echo "Run $1 benchmark with 10 keys, issuing 100000 requests"
+# Each key will receives 10000 requests
+# We put a limit that can not be exceeded 10000 requests per second, so that we benchmark a maximum case
+redis-benchmark -h $redis_host -p $redis_port --dbnum $redis_db -q -r 10 -n 100000 $CMD "testkey-__rand_int__" 1000 10000
+echo Ok
+
+echo "---"
+echo list the benchmark keys
+redis-cli -h $redis_host -p $redis_port -n $redis_db KEYS "testkey-*"
+echo Ok
