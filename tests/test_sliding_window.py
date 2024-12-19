@@ -12,18 +12,25 @@ import unittest
 
 from redis import ResponseError
 
-from .utils import add_sliding_window_cmd, redis_connect, WindowDef, safe_key
+from .utils import (
+    rdsconn_with_sliding_window_script_cmd,
+    rdsconn_with_sliding_window_func_cmd,
+    WindowDef,
+    safe_key,
+)
 
 # random TEST_KEY to prevent use conflicts if multiple tests run in //
 TEST_KEY = safe_key()
 
 
-class TestRedisConn(unittest.TestCase):
-    """Open redis connection and add sliding_window lua cmd wrapper"""
+class TestSlidingWindowScript(unittest.TestCase):
+    """Tests in this class are using 'real' Redis server time"""
+
+    redis_conn_factory = rdsconn_with_sliding_window_script_cmd
 
     @classmethod
     def setUpClass(cls):
-        cls.rdsconn = add_sliding_window_cmd(redis_connect())
+        cls.rdsconn = cls.redis_conn_factory()
 
     def tearDown(self):
         resp = self.rdsconn.delete(TEST_KEY)
@@ -33,10 +40,6 @@ class TestRedisConn(unittest.TestCase):
 
         # Close connection
         cls.rdsconn.close()
-
-
-class TestSlidingWindow(TestRedisConn):
-    """Tests in this class are using 'real' Redis server time"""
 
     def test_w1000_b0_roundtrip(self):
 
@@ -166,3 +169,8 @@ class TestSlidingWindow(TestRedisConn):
 
         # make sure that TEST_KEY is not in redis
         self.assertFalse(self.rdsconn.exists(TEST_KEY))
+
+
+class TestSlidingWindowFunc(TestSlidingWindowScript):
+
+    redis_conn_factory = rdsconn_with_sliding_window_func_cmd

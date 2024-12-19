@@ -17,6 +17,11 @@ import redis
 projdir = dirname(dirname(abspath(__file__)))
 
 
+class WindowDef(NamedTuple):
+    size_ms: int
+    limit: int
+
+
 def redis_connect() -> redis.Redis:
     """open redis connection reading parameters from process environment"""
 
@@ -30,15 +35,13 @@ def redis_connect() -> redis.Redis:
     )
 
 
-class WindowDef(NamedTuple):
-    size_ms: int
-    limit: int
-
-
-def add_sliding_window_cmd(rdsconn: redis.Redis) -> None:
-    """add sliding_window command to rdsconn connection"""
+@staticmethod
+def rdsconn_with_sliding_window_script_cmd() -> redis.Redis:
+    """returns redis connection with sliding_window command that calls the sliding_window.lua script"""
 
     scriptsrc = load_lua_command("sliding_window.lua")
+
+    rdsconn = redis_connect()
     callcmd = rdsconn.register_script(scriptsrc)
 
     # callcmd is low level
@@ -58,6 +61,40 @@ def add_sliding_window_cmd(rdsconn: redis.Redis) -> None:
             lua_args.append(extra_ttl_ms)
 
         return callcmd(keys=[key], args=lua_args, client=pipe_to)
+
+    rdsconn.sliding_window = sliding_window
+
+    return rdsconn
+
+
+@staticmethod
+def rdsconn_with_sliding_window_func_cmd() -> redis.Redis:
+    """returns redis connection with sliding_window command that calls the registered sliding_window  function"""
+
+    rdsconn = redis_connect()
+    funcsrc = load_lua_command("redis_limiter_funcs.lua")
+    rdsconn.function_load(funcsrc, replace=True)
+
+    # we adapt redis FCALL usage so that from Python side
+    # lua script and lua function have the same interface
+    # this allows reusing tests...
+    def sliding_window(
+        key: str,
+        main_window: WindowDef,
+        *burst_limits: WindowDef,
+        extra_ttl_ms: Optional[int] = None,
+        pipe_to: Optional[redis.client.Pipeline] = None,
+    ):
+        conn = pipe_to or rdsconn
+
+        lua_args = ["sliding_window", 1, key]
+        lua_args.extend(main_window)
+        for bw in burst_limits:
+            lua_args.extend(bw)
+        if extra_ttl_ms is not None:
+            lua_args.append(extra_ttl_ms)
+
+        return conn.fcall(*lua_args)
 
     rdsconn.sliding_window = sliding_window
 
@@ -93,4 +130,4 @@ class FileLoader:
             return f.read()
 
 
-load_lua_command = FileLoader(join(projdir, "redis")).load
+load_lua_command = FileLoader(join(projdir, "src")).load
